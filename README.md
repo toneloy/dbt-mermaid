@@ -1,2 +1,1 @@
 # dbt-mermaid
-# dbt-mermaid
