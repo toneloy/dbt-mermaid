@@ -4,6 +4,9 @@ from types import FunctionType
 
 
 class Parser:
+    """
+    A class to handle json files like manifest.json and catalog.json
+    """
     data = None
 
     def __init__(self, path: str) -> None:
@@ -19,6 +22,9 @@ class Parser:
 
 
 class Manifest(Parser):
+    """
+    A class to handle the manifest.json file
+    """
     def get_nodes_by_type(
         self,
         resource_type: str,
@@ -45,12 +51,26 @@ class Catalog(Parser):
 
 
 class Node:
+    """
+    A class to represent a node (model, test, etc.) in the manifest. It won't
+    actually contain any data until the `load` method is executed
+    """
     properties = dict()
 
     def __init__(self, unique_id: str) -> None:
+        """
+        Args:
+            unique_id: The unique_id of the node
+        """
         self.unique_id = unique_id
 
     def load(self, manifest: Manifest) -> None:
+        """
+        Load the node data from the manifest
+
+        Args:
+            manifest: A `Manifest` object
+        """
         self.properties = manifest["nodes"][self.unique_id]
     
     def __getitem__(self, key: str) -> any:
@@ -122,6 +142,7 @@ class Dbt:
         return relationship_models
 
     def models(self, select=""):
+        # TODO: Figure out how we can delegate the select functionality to dbt
         match_fqn = select.split(".")
         selected_models = dict()
         for key, model in self.manifest.get_nodes_by_type("model").items():
