@@ -8,10 +8,25 @@ def cli():
 
 
 @cli.command
-@click.option("--manifest-path", envvar="DBT_MANIFEST_PATH")
-@click.option("--catalog-path", envvar="DBT_CATALOG_PATH")
-@click.option("--show-fields/--hide-fields", is_flag=True, default=False)
-@click.option("--select", default="")
+@click.option(
+    "--manifest-path",
+    "-m",
+    envvar="DBT_MANIFEST_PATH",
+    help="Path to the dbt manifest.json")
+@click.option(
+    "--catalog-path",
+    "-c",
+    envvar="DBT_CATALOG_PATH",
+    help="Path to the dbt catalog.json")
+@click.option(
+    "--show-fields/--hide-fields",
+    is_flag=True,
+    default=False,
+    help="Show the table fields in the diagram?")
+@click.option(
+    "--select",
+    default="",
+    help="A selection of models to include in the diagram")
 def erd(manifest_path, catalog_path, show_fields, select):
 
     manifest = Manifest(manifest_path)
