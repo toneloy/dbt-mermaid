@@ -66,7 +66,7 @@ class Node:
 
     def load(self, manifest: Manifest) -> None:
         """
-        Load the node data from the manifest
+        Load the node properties from the manifest
 
         Args:
             manifest: A `Manifest` object
@@ -78,6 +78,7 @@ class Node:
 
 
 class Column:
+    """A class to represent a column in a dbt model"""
     def __init__(self, properties):
         self.properties = properties
 
@@ -99,6 +100,7 @@ class Column:
 
 
 class Model(Node):
+    """A class to represent a model node in the dbt manifest"""
     def load(self, manifest, catalog):
         super().load(manifest)
         self.properties["catalog"] = catalog["nodes"][self.unique_id]
@@ -154,9 +156,7 @@ class Dbt:
         return selected_models
 
     def get_mermaid(self, show_fields=False, select=""):
-        """
-        Get the mermaid code for the ERD
-        """
+        """Get the mermaid code for the ERD"""
         mermaid_lines = ["```mermaid", "erDiagram"]
         mermaid_relationships_list = [relationship.get_mermaid() for relationship in self.relationships()]
         mermaid_lines += mermaid_relationships_list
