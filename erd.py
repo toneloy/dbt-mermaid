@@ -1,6 +1,8 @@
 import re
 import json
 from types import FunctionType
+from dataclasses import dataclass
+from typing import Optional
 
 
 class Parser:
@@ -38,7 +40,7 @@ class Manifest(Parser):
             filter: A function that takes the properties of a node and
                     returns True for selected models
         """
-        nodes = {k: node for k, node in self["nodes"].items()
+        nodes = {k: Node(k, self) for k, node in self["nodes"].items()
                  if node["resource_type"] == resource_type}
         if filter:
             nodes = {k: node for k, node in nodes.items() if filter(node)}
@@ -50,40 +52,55 @@ class Catalog(Parser):
     pass
 
 
+@dataclass
 class Node:
     """
-    A class to represent a node (model, test, etc.) in the manifest. It won't
-    actually contain any data until the `load` method is executed
+    A class to represent a node (model, test, etc.) in the manifest. 
     """
-    properties = dict()
+    unique_id: str
+    manifest: Manifest
 
-    def __init__(self, unique_id: str) -> None:
-        """
-        Args:
-            unique_id: The unique_id of the node
-        """
-        self.unique_id = unique_id
-
-    def load(self, manifest: Manifest) -> None:
-        """
-        Load the node properties from the manifest
-
-        Args:
-            manifest: A `Manifest` object
-        """
-        self.properties = manifest["nodes"][self.unique_id]
-    
     def __getitem__(self, key: str) -> any:
-        return self.properties.get(key)
+        return self.manifest["nodes"][self.unique_id].get(key)
+    
+    def is_unique_test(self):
+        return self["resource_type"] == "test" and self["test_metadata"]["name"] == "unique"
 
 
+@dataclass
+class Model(Node):
+    """A class to represent a model node in the dbt manifest"""
+    unique_id: str
+    manifest: Manifest
+    catalog: Catalog
+
+    @property
+    def columns(self) -> dict:
+        return {name: Column(name, self) for name in self.catalog["nodes"][self.unique_id]["columns"]}
+    
+    def get_mermaid(self, indent=4):
+        tab = " " * indent
+        mermaid_elements = [f"{tab}{self['name']} {{"]
+        mermaid_elements += [column.get_mermaid() for column in self.columns.values()]
+        mermaid_elements.append(f"{tab}}}")
+        mermaid = "\n".join(mermaid_elements)
+        return mermaid
+    
+    def unique_tests(self):
+        return self.manifest.get_nodes_by_type("test", lambda node: node["test_metadata"]["name"] == "unique")
+
+    def __repr__(self):
+        return self["name"]
+
+
+@dataclass
 class Column:
     """A class to represent a column in a dbt model"""
-    def __init__(self, properties):
-        self.properties = properties
+    name: str
+    model: Model
 
     def __getitem__(self, key):
-        return self.properties[key]
+        return self.model.catalog["nodes"][self.model.unique_id]["columns"][self.name][key]
 
     def clean_property(self, property):
         """Clean a property according to mermaid specifications"""
@@ -97,34 +114,16 @@ class Column:
         column_type = self.clean_property("type")
         column_name = self.clean_property("name")
         return f'{tab}{column_type} {column_name}'
-
-
-class Model(Node):
-    """A class to represent a model node in the dbt manifest"""
-    def load(self, manifest, catalog):
-        super().load(manifest)
-        self.properties["catalog"] = catalog["nodes"][self.unique_id]
-
-    @property
-    def columns(self) -> dict:
-        return {k: Column(v) for k, v in self["catalog"]["columns"].items()}
     
-    def get_mermaid(self, indent=4):
-        tab = " " * indent
-        mermaid_elements = [f"{tab}{self['name']} {{"]
-        mermaid_elements += [column.get_mermaid() for column in self.columns.values()]
-        mermaid_elements.append(f"{tab}}}")
-        mermaid = "\n".join(mermaid_elements)
-        return mermaid
-    
-    def __repr__(self):
-        return self["name"]
+    def is_primary_key(self):
+        unique_tests = self.model.manifest.get_nodes_by_type("test", lambda n: n["test_metadata"]["name"] == "unique")
+        return False
 
 
+@dataclass
 class Dbt:
-    def __init__(self, manifest: Manifest, catalog: Catalog) -> None:
-        self.manifest = manifest
-        self.catalog = catalog
+    manifest: Manifest
+    catalog: Catalog
 
     def relationships(self) -> dict:
         relationship_tests = self.manifest.get_nodes_by_type(
@@ -136,10 +135,10 @@ class Dbt:
 
         for relationship_nodes in relationship_model_pairs:
             model_a_id, model_b_id = relationship_nodes
-            model_a, model_b = Model(model_a_id), Model(model_b_id)
-            model_a.load(self.manifest, self.catalog)
-            model_b.load(self.manifest, self.catalog)
-            relationship_models.append(Relationship(model_a, model_b))
+            model_a = Model(model_a_id, self.manifest, self.catalog)
+            model_b = Model(model_b_id, self.manifest, self.catalog)
+            relationship = Relationship(model_a, model_b)
+            relationship_models.append(relationship)
 
         return relationship_models
 
@@ -148,8 +147,7 @@ class Dbt:
         match_fqn = select.split(".")
         selected_models = dict()
         for key, model in self.manifest.get_nodes_by_type("model").items():
-            model = Model(key)
-            model.load(self.manifest, self.catalog)
+            model = Model(key, self.manifest, self.catalog)
             if select == "" or model["fqn"][1:(len(match_fqn) + 1)] == match_fqn:
                 selected_models[key] = model
 
@@ -170,16 +168,11 @@ class Dbt:
         return mermaid
 
 
+@dataclass
 class Relationship:
-    def __init__(
-        self,
-        model_a: Model,
-        model_b: Model,
-        relationship_type: str = "||--o{"
-    ) -> None:
-        self.model_a = model_a
-        self.model_b = model_b
-        self.relationship_type = relationship_type
+    model_a: Model
+    model_b: Model
+    relationship_type: Optional[str] = '||--o{'
 
     def get_mermaid(self, indent=4):
         tab = " " * indent
