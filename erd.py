@@ -60,11 +60,32 @@ class Node:
     unique_id: str
     manifest: Manifest
 
+    def __post_init__(self):
+        if not self.validate():
+            raise ValueError("Error validating this node")
+
     def __getitem__(self, key: str) -> any:
         return self.manifest["nodes"][self.unique_id].get(key)
     
+    def validate(self):
+        return True
+
     def is_unique_test(self):
         return self["resource_type"] == "test" and self["test_metadata"]["name"] == "unique"
+
+    def is_not_null_test(self):
+        return self["resource_type"] == "test" and self["test_metadata"]["name"] == "not_null"
+    
+
+class Test(Node):
+    def validate(self):
+        return self["resource_type"] == "test"
+
+    def is_unique_test(self):
+        return self["resource_type"] == "test" and self["test_metadata"]["name"] == "unique"
+
+    def is_not_null_test(self):
+        return self["resource_type"] == "test" and self["test_metadata"]["name"] == "not_null"
 
 
 @dataclass
@@ -78,6 +99,14 @@ class Model(Node):
     def columns(self) -> dict:
         return {name: Column(name, self) for name in self.catalog["nodes"][self.unique_id]["columns"]}
     
+    @property
+    def unique_columns(self):
+        return {test["test_metadata"]["kwargs"]["column_name"] for test in self.unique_tests().values()}
+
+    @property
+    def not_null_columns(self):
+        return {test["test_metadata"]["kwargs"]["column_name"] for test in self.not_null_tests().values()}
+
     def get_mermaid(self, indent=4):
         tab = " " * indent
         mermaid_elements = [f"{tab}{self['name']} {{"]
@@ -87,7 +116,10 @@ class Model(Node):
         return mermaid
     
     def unique_tests(self):
-        return self.manifest.get_nodes_by_type("test", lambda node: node["test_metadata"]["name"] == "unique")
+        return self.manifest.get_nodes_by_type("test", lambda node: node.is_unique_test())
+
+    def not_null_tests(self):
+        return self.manifest.get_nodes_by_type("test", lambda node: node.is_not_null_test())
 
     def __repr__(self):
         return self["name"]
@@ -113,11 +145,19 @@ class Column:
         tab = " " * indent * 2
         column_type = self.clean_property("type")
         column_name = self.clean_property("name")
-        return f'{tab}{column_type} {column_name}'
-    
+        return f'{tab}{column_type} {column_name}{" PK" if self.is_primary_key else ""}'
+
+    @property    
+    def is_unique(self):
+        return self.name in self.model.unique_columns
+
+    @property
+    def is_not_null(self):
+        return self.name in self.model.not_null_columns
+
+    @property
     def is_primary_key(self):
-        unique_tests = self.model.manifest.get_nodes_by_type("test", lambda n: n["test_metadata"]["name"] == "unique")
-        return False
+        return self.is_unique and self.is_not_null
 
 
 @dataclass
