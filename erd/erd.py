@@ -19,7 +19,7 @@ class Dbt:
     def load_manifest(self):
         with open(self.manifest_path, 'r') as f:
             self.manifest = json.load(f)
-    
+
     def load_catalog(self):
         with open(self.catalog_path, 'r') as f:
             self.catalog = json.load(f)
@@ -43,18 +43,20 @@ class Dbt:
             nodes = {k: node for k, node in nodes.items() if filter(node)}
 
         return nodes
-    
+
     def get_tests_by_type(self, test_type):
-        return {k: test for k, test in self.tests().items() if test.get("test_metadata", {}).get("name") == test_type}
-    
+        return {k: test for k, test in self.tests().items()
+                if test.get("test_metadata", {}).get("name") == test_type}
+
     @property
     def tests(self):
         tests = self.get_nodes_by_type("test")
         return {k: Test(k, self) for k in tests}
-    
+
     @property
     def relationships(self):
-        return {k: RelationshipTest(k, self) for k, node in self.tests.items() if node.is_relationship}
+        return {k: RelationshipTest(k, self) for k, node in self.tests.items()
+                if node.is_relationship}
 
     def models(self, select=""):
         # TODO: Figure out how we can delegate the select functionality to dbt
@@ -62,7 +64,7 @@ class Dbt:
         selected_models = dict()
         for key, model in self.get_nodes_by_type("model").items():
             model = Model(key, self)
-            if select == "" or model["fqn"][1:(len(match_fqn) + 1)] == match_fqn:
+            if select == "" or model["fqn"][1:(len(match_fqn) + 1)] == match_fqn:  # noqa
                 selected_models[key] = model
 
         return selected_models
@@ -70,20 +72,23 @@ class Dbt:
     def get_mermaid(self, show_fields=False, select=""):
         """Get the mermaid code for the ERD"""
         mermaid_lines = ["erDiagram"]
-        mermaid_relationships_list = [relationship.get_mermaid() for relationship in self.relationships.values()]
+        mermaid_relationships_list = [relationship.get_mermaid(
+        ) for relationship in self.relationships.values()]
         mermaid_lines += mermaid_relationships_list
 
         if show_fields:
-            catalog_mermaid_list = [model.get_mermaid() for model in self.models(select).values()]
+            catalog_mermaid_list = [model.get_mermaid()
+                                    for model in self.models(select).values()]
             mermaid_catalog = "\n".join(catalog_mermaid_list)
             mermaid_lines.append(mermaid_catalog)
         mermaid = "\n".join(mermaid_lines)
         return mermaid
 
+
 @dataclass
 class Node:
     """
-    A class to represent a node (model, test, etc.) in the manifest. 
+    A class to represent a node (model, test, etc.) in the manifest.
     """
     unique_id: str
     project: Dbt
@@ -94,7 +99,7 @@ class Node:
 
     def __getitem__(self, key: str) -> any:
         return self.project.manifest["nodes"][self.unique_id].get(key)
-    
+
     def get(self, key, default=None):
         return self.project.manifest["nodes"][self.unique_id].get(key, default)
 
@@ -108,42 +113,49 @@ class Test(Node):
 
     @property
     def is_unique_test(self):
-        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "unique"
+        return self.get("test_metadata", {}).get("name") == "unique"
 
     @property
     def is_not_null_test(self):
-        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "not_null"
-    
+        return self.get("test_metadata", {}).get("name") == "not_null"
+
     @property
     def is_relationship(self):
-        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "relationships"
+        return self.get("test_metadata", {}).get("name") == "relationships"
 
 
 class RelationshipTest(Test):
     @property
     def models(self):
-        return [Model(unique_id, self.project) for unique_id in self["depends_on"]["nodes"]]
-    
+        return [Model(unique_id, self.project)
+                for unique_id in self["depends_on"]["nodes"]]
+
     @property
     def model_a(self):
         return self.models[0]
 
-    @property    
+    @property
     def model_b(self):
         return self.models[1]
 
     @property
     def foreign_key(self):
-        return Column(self["test_metadata"]["kwargs"]["column_name"], self.model_b)
+        return Column(
+            self["test_metadata"]["kwargs"]["column_name"],
+            self.model_b
+        )
 
     @property
     def to(self):
-        return Column(self["test_metadata"]["kwargs"]["field"], self.model_a)
-    
+        return Column(
+            self["test_metadata"]["kwargs"]["field"],
+            self.model_a
+        )
+
     @property
     def cardinality_left(self):
         return "||" if self.foreign_key.is_not_null else '|o'
-    
+
     @property
     def cardinality_right(self):
         return 'o|' if self.foreign_key.is_unique else 'o{'
@@ -151,7 +163,7 @@ class RelationshipTest(Test):
     @property
     def relationship_type(self):
         return f'{self.cardinality_left}--{self.cardinality_right}'
-    
+
     def get_mermaid(self):
         return f'{self.model_a} {self.relationship_type} {self.model_b}: ""'
 
@@ -163,38 +175,49 @@ class Model(Node):
     project: Dbt
 
     @property
+    def catalog(self):
+        return self.project.catalog["nodes"][self.unique_id]
+
+    @property
     def columns(self) -> dict:
-        return {name: Column(name, self) for name in self.project.catalog["nodes"][self.unique_id]["columns"]}
-    
+        return {name: Column(name, self)
+                for name in self.catalog["columns"]}
+
     @property
     def unique_columns(self):
-        return {test["test_metadata"]["kwargs"]["column_name"] for test in self.unique_tests.values()}
+        return {test["test_metadata"]["kwargs"]["column_name"]
+                for test in self.unique_tests.values()}
 
     @property
     def not_null_columns(self):
-        return {test["test_metadata"]["kwargs"]["column_name"] for test in self.not_null_tests.values()}
+        return {test["test_metadata"]["kwargs"]["column_name"]
+                for test in self.not_null_tests.values()}
 
     def get_mermaid(self, indent=4):
         mermaid_elements = [f"{self['name']} {{"]
-        mermaid_elements += [column.get_mermaid() for column in self.columns.values()]
+        mermaid_elements += [column.get_mermaid()
+                             for column in self.columns.values()]
         mermaid_elements.append("}")
         mermaid = "\n".join(mermaid_elements)
         return mermaid
 
     @property
     def tests(self):
-        return {k: test for k, test in self.project.tests.items() if self.unique_id in test["depends_on"]["nodes"]}
+        return {k: test for k, test in self.project.tests.items()
+                if self.unique_id in test["depends_on"]["nodes"]}
 
     def is_related_test(self, node):
         return node.unique_id in self.tests
 
     @property
     def unique_tests(self):
-        return {k: node for k, node in self.tests.items() if node.is_unique_test}
+        return {k: node for k, node in self.tests.items()
+                if node.is_unique_test}
 
     @property
     def not_null_tests(self):
-        return {k: node for k, node in self.tests.items() if node.is_not_null_test}
+        return {k: node for k, node in self.tests.items()
+                if node.is_not_null_test}
 
     def __repr__(self):
         return self["name"]
@@ -207,22 +230,23 @@ class Column:
     model: Model
 
     def __getitem__(self, key):
-        return self.model.project.catalog["nodes"][self.model.unique_id]["columns"][self.name][key]
+        return self.model.columns[self.name][key]
 
     def clean_property(self, property):
         """Clean a property according to mermaid specifications"""
         cleaned_name = re.sub("^([^a-zA-Z])+", "", self[property])
         cleaned_name = re.sub("([^a-zA-Z0-9_])+", "_", cleaned_name)
         return cleaned_name
-    
+
     def get_mermaid(self, indent=4):
         """Get the mermaid representation"""
         tab = " " * indent
         column_type = self.clean_property("type")
         column_name = self.clean_property("name")
-        return f'{tab}{column_type} {column_name}{" PK" if self.is_primary_key else ""}'
+        pk_marker = " PK" if self.is_primary_key else ""
+        return f'{tab}{column_type} {column_name}{pk_marker}'
 
-    @property    
+    @property
     def is_unique(self):
         return self.name in self.model.unique_columns
 
@@ -233,4 +257,3 @@ class Column:
     @property
     def is_primary_key(self):
         return self.is_unique and self.is_not_null
-
