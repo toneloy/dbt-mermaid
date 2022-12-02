@@ -1,6 +1,6 @@
 import json
 import click
-from erd import Dbt, Manifest, Catalog
+from erd import Dbt
 
 @click.group()
 def cli():
@@ -29,13 +29,7 @@ def cli():
     help="A selection of models to include in the diagram")
 def erd(manifest_path, catalog_path, show_fields, select):
 
-    manifest = Manifest(manifest_path)
-    catalog = Catalog(catalog_path)
-
-    dbt = Dbt(
-        manifest=manifest,
-        catalog=catalog
-    )
+    dbt = Dbt(manifest_path, catalog_path)
     mermaid = dbt.get_mermaid(show_fields=show_fields, select=select)
     click.echo(mermaid)
 
