@@ -11,11 +11,13 @@ def cli():
     "--manifest-path",
     "-m",
     envvar="DBT_MANIFEST_PATH",
+    default="target/manifest.json",
     help="Path to the dbt manifest.json")
 @click.option(
     "--catalog-path",
     "-c",
     envvar="DBT_CATALOG_PATH",
+    default="target/catalog.json",
     help="Path to the dbt catalog.json")
 @click.option(
     "--show-fields/--hide-fields",
