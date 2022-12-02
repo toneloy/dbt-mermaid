@@ -11,7 +11,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'erd = cli:erd',
+            'erd = erd.scripts.cli:erd',
         ],
     },
 )

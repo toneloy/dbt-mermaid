@@ -1,6 +1,5 @@
-import json
 import click
-from erd import Dbt
+from erd.erd import Dbt
 
 @click.group()
 def cli():
