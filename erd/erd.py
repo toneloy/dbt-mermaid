@@ -44,9 +44,17 @@ class Dbt:
 
         return nodes
     
+    def get_tests_by_type(self, test_type):
+        return {k: test for k, test in self.tests().items() if test.get("test_metadata", {}).get("name") == test_type}
+    
+    @property
+    def tests(self):
+        tests = self.get_nodes_by_type("test")
+        return {k: Test(k, self) for k in tests}
+    
+    @property
     def relationships(self):
-        relationship_nodes = self.get_nodes_by_type("test", lambda node: node.is_relationship())
-        return {k: RelationshipTest(k, self) for k in relationship_nodes}
+        return {k: RelationshipTest(k, self) for k, node in self.tests.items() if node.is_relationship}
 
     def models(self, select=""):
         # TODO: Figure out how we can delegate the select functionality to dbt
@@ -62,7 +70,7 @@ class Dbt:
     def get_mermaid(self, show_fields=False, select=""):
         """Get the mermaid code for the ERD"""
         mermaid_lines = ["erDiagram"]
-        mermaid_relationships_list = [relationship.get_mermaid() for relationship in self.relationships().values()]
+        mermaid_relationships_list = [relationship.get_mermaid() for relationship in self.relationships.values()]
         mermaid_lines += mermaid_relationships_list
 
         if show_fields:
@@ -93,25 +101,22 @@ class Node:
     def validate(self):
         return True
 
-    def is_unique_test(self):
-        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "unique"
-
-    def is_not_null_test(self):
-        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "not_null"
-    
-    def is_relationship(self):
-        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "relationships"
-    
 
 class Test(Node):
     def validate(self):
         return self["resource_type"] == "test"
 
+    @property
     def is_unique_test(self):
-        return self["resource_type"] == "test" and self["test_metadata"]["name"] == "unique"
+        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "unique"
 
+    @property
     def is_not_null_test(self):
-        return self["resource_type"] == "test" and self["test_metadata"]["name"] == "not_null"
+        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "not_null"
+    
+    @property
+    def is_relationship(self):
+        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "relationships"
 
 
 class RelationshipTest(Test):
@@ -141,7 +146,7 @@ class RelationshipTest(Test):
     
     @property
     def cardinality_right(self):
-        return 'o{' if self.to.is_unique else 'o|'
+        return 'o|' if self.foreign_key.is_unique else 'o{'
 
     @property
     def relationship_type(self):
@@ -163,11 +168,11 @@ class Model(Node):
     
     @property
     def unique_columns(self):
-        return {test["test_metadata"]["kwargs"]["column_name"] for test in self.unique_tests().values()}
+        return {test["test_metadata"]["kwargs"]["column_name"] for test in self.unique_tests.values()}
 
     @property
     def not_null_columns(self):
-        return {test["test_metadata"]["kwargs"]["column_name"] for test in self.not_null_tests().values()}
+        return {test["test_metadata"]["kwargs"]["column_name"] for test in self.not_null_tests.values()}
 
     def get_mermaid(self, indent=4):
         mermaid_elements = [f"{self['name']} {{"]
@@ -175,12 +180,21 @@ class Model(Node):
         mermaid_elements.append("}")
         mermaid = "\n".join(mermaid_elements)
         return mermaid
-    
-    def unique_tests(self):
-        return self.project.get_nodes_by_type("test", lambda node: node.is_unique_test())
 
+    @property
+    def tests(self):
+        return {k: test for k, test in self.project.tests.items() if self.unique_id in test["depends_on"]["nodes"]}
+
+    def is_related_test(self, node):
+        return node.unique_id in self.tests
+
+    @property
+    def unique_tests(self):
+        return {k: node for k, node in self.tests.items() if node.is_unique_test}
+
+    @property
     def not_null_tests(self):
-        return self.project.get_nodes_by_type("test", lambda node: node.is_not_null_test())
+        return {k: node for k, node in self.tests.items() if node.is_not_null_test}
 
     def __repr__(self):
         return self["name"]
