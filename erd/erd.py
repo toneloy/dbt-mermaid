@@ -87,17 +87,20 @@ class Node:
     def __getitem__(self, key: str) -> any:
         return self.project.manifest["nodes"][self.unique_id].get(key)
     
+    def get(self, key, default=None):
+        return self.project.manifest["nodes"][self.unique_id].get(key, default)
+
     def validate(self):
         return True
 
     def is_unique_test(self):
-        return self["resource_type"] == "test" and self["test_metadata"]["name"] == "unique"
+        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "unique"
 
     def is_not_null_test(self):
-        return self["resource_type"] == "test" and self["test_metadata"]["name"] == "not_null"
+        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "not_null"
     
     def is_relationship(self):
-        return self["resource_type"] == "test" and self["test_metadata"]["name"] == "relationships"
+        return self["resource_type"] == "test" and self.get("test_metadata", {}).get("name") == "relationships"
     
 
 class Test(Node):
