@@ -37,7 +37,12 @@ class Dbt:
             filter: A function that takes the properties of a node and
                     returns True for selected models
         """
-        nodes = {k: Node(k, self) for k, node in self.manifest["nodes"].items()
+        node_classes = {
+            "model": Model,
+            "test": Test
+        }
+        node_class = node_classes.get(resource_type, Node)
+        nodes = {k: node_class(k, self) for k, node in self.manifest["nodes"].items()
                  if node["resource_type"] == resource_type}
         if filter:
             nodes = {k: node for k, node in nodes.items() if filter(node)}
@@ -53,32 +58,31 @@ class Dbt:
         tests = self.get_nodes_by_type("test")
         return {k: Test(k, self) for k in tests}
 
-    @property
-    def relationships(self):
+    @staticmethod
+    def get_unique_ids(nodes):
+        return [node.split(".")[-1] for node in nodes]
+
+    def relationships(self, nodes=None):
+        if nodes:
+            return {k: RelationshipTest(k, self) for k, node in self.tests.items()
+                    if node.is_relationship and node["name"] in nodes}
         return {k: RelationshipTest(k, self) for k, node in self.tests.items()
-                if node.is_relationship}
+            if node.is_relationship}
 
-    def models(self, select=""):
-        # TODO: Figure out how we can delegate the select functionality to dbt
-        match_fqn = select.split(".")
-        selected_models = dict()
-        for key, model in self.get_nodes_by_type("model").items():
-            model = Model(key, self)
-            if select == "" or model["fqn"][1:(len(match_fqn) + 1)] == match_fqn:  # noqa
-                selected_models[key] = model
+    def models(self, nodes=None):
+        return self.get_nodes_by_type("model", lambda model: not nodes or model["name"] in nodes)
 
-        return selected_models
-
-    def get_mermaid(self, show_fields=False, select=""):
+    def get_mermaid(self, nodes=None, show_fields=False):
         """Get the mermaid code for the ERD"""
+        unique_ids = self.get_unique_ids(nodes)
         mermaid_lines = ["erDiagram"]
-        mermaid_relationships_list = [relationship.get_mermaid(
-        ) for relationship in self.relationships.values()]
+        mermaid_relationships_list = [relationship.get_mermaid()
+                                      for relationship
+                                      in self.relationships(unique_ids).values()]
         mermaid_lines += mermaid_relationships_list
 
         if show_fields:
-            catalog_mermaid_list = [model.get_mermaid()
-                                    for model in self.models(select).values()]
+            catalog_mermaid_list = [model.get_mermaid() for model in self.models(unique_ids).values()]
             mermaid_catalog = "\n".join(catalog_mermaid_list)
             mermaid_lines.append(mermaid_catalog)
         mermaid = "\n".join(mermaid_lines)
@@ -180,8 +184,7 @@ class Model(Node):
 
     @property
     def columns(self) -> dict:
-        return {name: Column(name, self)
-                for name in self.catalog["columns"]}
+        return {name: Column(name, self) for name in self.catalog["columns"]}
 
     @property
     def unique_columns(self):
@@ -193,7 +196,7 @@ class Model(Node):
         return {test["test_metadata"]["kwargs"]["column_name"]
                 for test in self.not_null_tests.values()}
 
-    def get_mermaid(self, indent=4):
+    def get_mermaid(self):
         mermaid_elements = [f"{self['name']} {{"]
         mermaid_elements += [column.get_mermaid()
                              for column in self.columns.values()]
@@ -230,7 +233,7 @@ class Column:
     model: Model
 
     def __getitem__(self, key):
-        return self.model.columns[self.name][key]
+        return self.model.catalog["columns"][self.name][key]
 
     def clean_property(self, property):
         """Clean a property according to mermaid specifications"""
