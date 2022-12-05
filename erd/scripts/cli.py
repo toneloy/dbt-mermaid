@@ -7,6 +7,7 @@ def cli():
 
 
 @cli.command
+@click.argument("nodes", nargs=-1)
 @click.option(
     "--manifest-path",
     "-m",
@@ -21,19 +22,11 @@ def cli():
     help="Path to the dbt catalog.json")
 @click.option(
     "--show-fields/--hide-fields",
+    "-s/-h",
     is_flag=True,
     default=False,
     help="Show the table fields in the diagram?")
-@click.option(
-    "--select",
-    default="",
-    help="A selection of models to include in the diagram")
-def erd(manifest_path, catalog_path, show_fields, select):
-
+def erd(manifest_path, catalog_path, show_fields, nodes):
     dbt = Dbt(manifest_path, catalog_path)
-    mermaid = dbt.get_mermaid(show_fields=show_fields, select=select)
+    mermaid = dbt.get_mermaid(show_fields=show_fields, nodes=nodes)
     click.echo(mermaid)
-
-
-if __name__ == "__main__":
-    cli()
