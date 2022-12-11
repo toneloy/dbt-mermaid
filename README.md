@@ -24,7 +24,7 @@ In your dbt project folder, just run
 erd
 ```
 
-You can also manually specify the path to the `manifest.json` and `catalog.json` files with the options `-m` and `-c` respectively. By default, the erd command will assume they're in the `target` folder.
+You can also manually specify the path to the `manifest.json` and `catalog.json` files with the options `-m` (or `--manifest`) and `-c` (or `--catalog`) respectively. By default, the `erd` command will assume they're in the `target` folder.
 
 ```bash
 erd -m /path/to/manifest.json
@@ -42,7 +42,13 @@ erd -s
 
 ### Selecting models/relationships
 
-You can use the output of `dbt list --select <selection-criteria>` to select which models and relationships you want to use by passing its output as the `erd` command argument. This will help you if you want to show the diagram for models in a specific folder or models that have a specific tag
+You can specify which models/tests you want to include in the diagram by specifying them as arguments.
+
+```bash
+erd [model_1 model_2 ...] [test_1 test_2 ...]
+```
+
+As a shortcut, you can use the output of `dbt list --select <selection-criteria>`. This will help you if you want to show the diagram for models in a specific folder or models that have a specific tag.
 
 ```bash
 erd $(dbt list --select <selection-criteria>)
