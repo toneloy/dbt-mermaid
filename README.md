@@ -24,11 +24,9 @@ In your dbt project folder, just run
 erd
 ```
 
-You can also manually specify the path to the `manifest.json` and `catalog.json` files with the options `-m` (or `--manifest`) and `-c` (or `--catalog`) respectively. By default, the `erd` command will assume they're in the `target` folder.
-
-```bash
-erd -m /path/to/manifest.json
-```
+You can also specify the path to the `manifest.json` and `catalog.json` files:
+1. With the options `--manifest` and `--catalog`. By default, the `erd` command will assume they're in the `target` folder.
+1. Setting the `DBT_MANIFEST_PATH` and `DBT_CATALOG_PATH` environment variables
 
 ### Showing the models fields
 
