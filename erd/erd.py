@@ -7,6 +7,9 @@ from typing import Optional
 
 @dataclass
 class Dbt:
+    """
+    This class represents a dbt project from its manifest and catalog
+    """
     manifest_path: str
     catalog_path: Optional[str] = ""
 
@@ -50,6 +53,9 @@ class Dbt:
         return nodes
 
     def get_tests_by_type(self, test_type):
+        """
+        Get tests of a certain type (relationships, unique, not_null, etc.)
+        """
         return {k: test for k, test in self.tests().items()
                 if test.get("test_metadata", {}).get("name") == test_type}
 
@@ -59,7 +65,7 @@ class Dbt:
         return {k: Test(k, self) for k in tests}
 
     @staticmethod
-    def get_unique_ids(nodes):
+    def get_name_from_path(nodes):
         return [node.split(".")[-1] for node in nodes]
 
     def relationships(self, nodes=None):
@@ -74,7 +80,7 @@ class Dbt:
 
     def get_mermaid(self, nodes=None, show_fields=False):
         """Get the mermaid code for the ERD"""
-        unique_ids = self.get_unique_ids(nodes)
+        unique_ids = self.get_name_from_path(nodes)
         mermaid_lines = ["erDiagram"]
         mermaid_relationships_list = [relationship.get_mermaid()
                                       for relationship
