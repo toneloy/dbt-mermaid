@@ -9,14 +9,16 @@ def cli():
 @cli.command
 @click.argument("nodes", nargs=-1)
 @click.option(
-    "--manifest-path",
+    "--manifest",
     "-m",
+    "manifest_path",
     envvar="DBT_MANIFEST_PATH",
     default="target/manifest.json",
     help="Path to the dbt manifest.json")
 @click.option(
-    "--catalog-path",
+    "--catalog",
     "-c",
+    "catalog_path",
     envvar="DBT_CATALOG_PATH",
     default="target/catalog.json",
     help="Path to the dbt catalog.json")
